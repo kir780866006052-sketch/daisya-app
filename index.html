@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>代車入替シミュレーション No.1</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    background: #f4f4f2;
+    margin: 0;
+    padding: 20px 12px 60px;
+    color: #222;
+  }
+  .sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #f4f4f2;
+    margin: -20px -12px 10px -12px;
+    padding: 20px 12px 8px 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  }
+  .header-row {
+    max-width: 1600px;
+    margin: 0 auto 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  h1 { font-size: 22px; margin: 0; }
+  .status { font-size: 13px; color: #666; }
+  .print-btn {
+    background: #2f6fb0;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .print-btn:hover { background: #235a8f; }
+
+  .toggle-group {
+    max-width: 1600px;
+    margin: 0 auto 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .toggle-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    border: 1px solid #999;
+    background: #fff;
+    border-radius: 20px;
+    cursor: pointer;
+  }
+  .toggle-btn.active {
+    background: #2f6fb0;
+    color: #fff;
+    border-color: #2f6fb0;
+    font-weight: bold;
+  }
+
+  .legend {
+    max-width: 1600px;
+    margin: 0 auto 10px;
+    font-size: 12px;
+    color: #555;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .legend-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 1px solid #999;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  .boards {
+    max-width: 1600px;
+    margin: 0 auto;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .board-left {
+    flex: 0 0 500px;
+    max-width: 500px;
+  }
+  .board-right {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .boards.view-left-only .board-right { display: none; }
+  .boards.view-left-only .board-left {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+  .boards.view-right-only .board-left { display: none; }
+  .boards.view-right-only .board-right {
+    flex: 1 1 auto;
+  }
+  .board {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 2px solid #333;
+    overflow-x: auto;
+  }
+  .board h2 {
+    font-size: 14px;
+    margin: 0;
+    padding: 10px 12px;
+    background: #e9e9e9;
+    border-bottom: 2px solid #333;
+  }
+  .table-scroll {
+    overflow-x: visible;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 11px;
+  }
+  th, td {
+    border: 1px solid #bbb;
+    padding: 4px 3px;
+    text-align: center;
+    white-space: nowrap;
+    height: 34px;
+  }
+  thead th {
+    font-weight: bold;
+    background: #cfe1f2;
+  }
+  .board-right thead th { background: #dbe9c8; }
+  th.mileage-head, th.kanou-head, th.henkyaku-head { background: #fdf7d0; }
+  th.tire-head { background: #e0d9f5; }
+  .boards:not(.view-right-only) .tire-head,
+  .boards:not(.view-right-only) .tire-cell { display: none; }
+  select {
+    width: 100%;
+    min-width: 40px;
+    padding: 3px 2px;
+    font-size: 11px;
+    text-align: center;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+  }
+  select.saved { border-color: #6fae4a; background: #f1f9ec; }
+
+  th.shop-head, td.shop-cell { background: #dcecf7; font-weight: bold; }
+
+  tr.shop-start td { border-top: 2px solid #333; }
+
+  .seq-cell { font-weight: bold; color: #2f6fb0; user-select: none; }
+  .seq-cell.right-seq { cursor: pointer; }
+  .seq-cell.right-seq:hover { text-decoration: underline; }
+
+  tr.rc-none td:not(.shop-cell) { background: #ffffff; }
+  tr.rc-orange td:not(.shop-cell) { background: #ffe0b3; }
+  tr.rc-gray td:not(.shop-cell) { background: #d9d9d9; color: #666; }
+  tr.rc-lightblue td:not(.shop-cell) { background: #cfe8f7; }
+  tr.rc-pink td:not(.shop-cell) { background: #fbd6e3; }
+
+  input {
+    width: 100%;
+    min-width: 40px;
+    padding: 3px 2px;
+    font-size: 11px;
+    text-align: center;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    height: 26px;
+    box-sizing: border-box;
+  }
+  input[type="date"] {
+    padding: 4px 2px;
+  }
+  input.saved { border-color: #6fae4a; background: #f1f9ec; }
+
+  .drag-handle {
+    cursor: grab;
+    color: #888;
+    font-weight: bold;
+    background: #f0f0f0 !important;
+    width: 22px;
+  }
+  tr.dragging { opacity: 0.5; outline: 3px solid #2f6fb0; outline-offset: -2px; }
+  tr.drag-over-top td { box-shadow: inset 0 3px 0 0 #2f6fb0; }
+  tr.drag-over-bottom td { box-shadow: inset 0 -3px 0 0 #2f6fb0; }
+  tr.empty-row td { color: #bbb; font-style: italic; }
+
+  .footer-note {
+    max-width: 1600px;
+    margin: 14px auto 0;
+    font-size: 12px;
+    color: #777;
+    text-align: center;
+  }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .sticky-header { position: static; box-shadow: none; margin: 0; background: #fff; }
+    .print-btn, .status, .toggle-group { display: none; }
+    .board { box-shadow: none; }
+    input { border: none; background: transparent; }
+    table { font-size: 10px; }
+    .footer-note { display: none; }
+    .drag-handle { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sticky-header">
+<div class="header-row">
+  <h1>代車入替シミュレーション No.1</h1>
+  <div style="display:flex; align-items:center; gap:16px;">
+    <span class="status" id="status">読み込み中...</span>
+    <button class="print-btn" onclick="window.print()">印刷する</button>
+  </div>
+</div>
+
+<div class="toggle-group" id="color-toggle-group">
+  <button class="toggle-btn active" data-color="all">全体の表示</button>
+  <button class="toggle-btn" data-color="orange">オレンジの表示</button>
+  <button class="toggle-btn" data-color="lightblue">ブルーの表示</button>
+  <button class="toggle-btn" data-color="gray">グレーの表示</button>
+</div>
+
+<div class="toggle-group" id="shop-toggle-group"></div>
+
+<div class="toggle-group" id="view-toggle-group">
+  <button class="toggle-btn active" data-view="both">両方表示</button>
+  <button class="toggle-btn" data-view="left">左側だけ表示</button>
+  <button class="toggle-btn" data-view="right">右側だけ表示</button>
+</div>
+
+<div class="legend">
+  <span>番号(右側の表)をクリックすると行の色を変更できます:</span>
+  <span><span class="legend-swatch" style="background:#ffffff;"></span>なし</span>
+  <span><span class="legend-swatch" style="background:#ffe0b3;"></span>1回目(オレンジ)</span>
+  <span><span class="legend-swatch" style="background:#d9d9d9;"></span>対象外(グレー)</span>
+  <span><span class="legend-swatch" style="background:#cfe8f7;"></span>2回目予定(ブルー)</span>
+  <span><span class="legend-swatch" style="background:#fbd6e3;"></span>その他マーク(ピンク)</span>
+</div>
+</div>
+
+<div class="boards" id="boards-container">
+  <div class="board board-left">
+    <h2>新しく店舗に配置される車両</h2>
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th class="shop-head">店舗名</th>
+          <th></th>
+          <th>番号</th>
+          <th>区分</th>
+          <th>車名</th>
+          <th>年式</th>
+          <th>登録No</th>
+          <th>車検期限</th>
+          <th>備考</th>
+        </tr>
+      </thead>
+      <tbody id="left-body"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="board board-right">
+    <h2>店舗から出庫する車両</h2>
+    <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th class="shop-head">店舗名</th>
+          <th></th>
+          <th>番号</th>
+          <th>用途</th>
+          <th>車名</th>
+          <th>型式</th>
+          <th>C/#</th>
+          <th>カラー</th>
+          <th>登録No</th>
+          <th class="mileage-head">走行距離</th>
+          <th class="kanou-head">入替可能日</th>
+          <th class="henkyaku-head">返却予定日</th>
+          <th class="tire-head">タイヤサイズ</th>
+          <th class="tire-head">タイヤ在庫</th>
+        </tr>
+      </thead>
+      <tbody id="right-body"></tbody>
+    </table>
+    </div>
+  </div>
+</div>
+
+<div class="footer-note">左側の表・右側の表それぞれ、行の左端（≡）をドラッグすると、店舗をまたいで自由に並び替えできます。空欄のセルはすべて入力・保存できます。</div>
+
+<script>
+// ↓↓↓ Apps Scriptをデプロイしたら、発行されたウェブアプリのURLをここに貼り付けてください ↓↓↓
+const GAS_URL = "https://script.google.com/macros/s/AKfycbybPPqbffh6m0md6aF0UMOMONb-OWFj9MOd_1odlMxqusIMntewf_tt03olNKEst34/exec";
+// ↑↑↑ ここにURLが入るまでは、画面表示だけできて保存はできません ↑↑↑
+
+const COLOR_CYCLE = ["none", "orange", "gray", "lightblue", "pink"];
+const COLOR_LABELS = {
+  none: "なし", orange: "1回目(オレンジ)", gray: "対象外(グレー)",
+  lightblue: "2回目予定(ブルー)", pink: "その他(ピンク)"
+};
+const COLOR_SWATCH = {
+  none: "#ffffff", orange: "#ffe0b3", gray: "#d9d9d9",
+  lightblue: "#cfe8f7", pink: "#fbd6e3"
+};
+
+const baseRows = [{"seq": "1", "shop": "石川店", "genKubun": "U6B0066", "genName": "ル-クスHWS-X", "nenshiki": "R07", "genRegno": "580と7708", "shaken": "R10.11", "biko": "クエスト5", "exitKubun": "⇔", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601488", "carColor": "ホワイトパール", "exitRegno": "580ト9346", "defaultColor": "orange", "mileage": "3500"}, {"seq": "2", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0601936", "carColor": "ブラック", "exitRegno": "580ト9210", "defaultColor": "none", "mileage": ""}, {"seq": "3", "shop": "石川店", "genKubun": "U6B0084", "genName": "ノ-ト X", "nenshiki": "R07", "genRegno": "500ふ7721", "shaken": "R10.09", "biko": "クエスト5", "exitKubun": "⇔", "exitName": "ノート", "exitModel": "X FOUR 4WD", "cnum": "232430", "carColor": "シルバー", "exitRegno": "500フ8708", "defaultColor": "orange", "mileage": "5563"}, {"seq": "4", "shop": "石川店", "genKubun": "U6B0075", "genName": "ノ-ト X", "nenshiki": "R07", "genRegno": "500ふ8201", "shaken": "R10.11", "biko": "クエスト5", "exitKubun": "⇔", "exitName": "ノート", "exitModel": "X FOUR 4WD", "cnum": "231991", "carColor": "ブラック", "exitRegno": "500フ8769", "defaultColor": "orange", "mileage": "2940"}, {"seq": "5", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X", "cnum": "0602214", "carColor": "ブラック", "exitRegno": "580ト9350", "defaultColor": "none", "mileage": ""}, {"seq": "6", "shop": "石川店", "genKubun": "U6B0093", "genName": "ノ-ト X", "nenshiki": "R07", "genRegno": "500ふ8202", "shaken": "R10.11", "biko": "クエスト5", "exitKubun": "⇔", "exitName": "ノート", "exitModel": "X FOUR 4WD", "cnum": "231354", "carColor": "ブラック", "exitRegno": "500フ8711", "defaultColor": "orange", "mileage": "1708"}, {"seq": "7", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X", "cnum": "0602512", "carColor": "バニラパール", "exitRegno": "580ト9351", "defaultColor": "none", "mileage": ""}, {"seq": "8", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X", "cnum": "0602459", "carColor": "シルバー", "exitRegno": "580ト9352", "defaultColor": "none", "mileage": ""}, {"seq": "9", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0601942", "carColor": "ブラック", "exitRegno": "580ト9353", "defaultColor": "none", "mileage": ""}, {"seq": "10", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602219", "carColor": "ブラック", "exitRegno": "580ト9354", "defaultColor": "none", "mileage": ""}, {"seq": "11", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601493", "carColor": "ホワイトパール", "exitRegno": "580ト9347", "defaultColor": "none", "mileage": ""}, {"seq": "12", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602721", "carColor": "ホワイトパール", "exitRegno": "580と9425", "defaultColor": "none", "mileage": ""}, {"seq": "13", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601468", "carColor": "グレー", "exitRegno": "580ト9364", "defaultColor": "none", "mileage": ""}, {"seq": "14", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X", "cnum": "0602307", "carColor": "ブラック", "exitRegno": "580ト9423", "defaultColor": "none", "mileage": ""}, {"seq": "15", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X", "cnum": "0601494", "carColor": "バニラパール", "exitRegno": "580ト9422", "defaultColor": "none", "mileage": ""}, {"seq": "16", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602017", "carColor": "ホワイトパール", "exitRegno": "580ト9420", "defaultColor": "none", "mileage": ""}, {"seq": "17", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "NV350", "exitModel": "DX", "cnum": "0010751", "carColor": "ガンメタ", "exitRegno": "100セ4453", "defaultColor": "none", "mileage": ""}, {"seq": "18", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "試乗車", "exitName": "セレナ", "exitModel": "e4 HS V", "cnum": "0014624", "carColor": "グレー", "exitRegno": "300ヌ9201", "defaultColor": "none", "mileage": ""}, {"seq": "19", "shop": "石川店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "試乗車", "exitName": "ルークス", "exitModel": "HS X 4", "cnum": "0000238", "carColor": "ホワイト", "exitRegno": "580ト7210", "defaultColor": "none", "mileage": ""}, {"seq": "20", "shop": "亀田本町店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "AD", "exitModel": "VE", "cnum": "118273", "carColor": "ホワイトパール", "exitRegno": "400セ9095", "defaultColor": "none", "mileage": ""}, {"seq": "21", "shop": "亀田本町店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602225", "carColor": "バニラパール", "exitRegno": "580ト9355", "defaultColor": "none", "mileage": ""}, {"seq": "22", "shop": "亀田本町店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "クリッパーバン", "exitModel": "DX", "cnum": "916334", "carColor": "シルバー", "exitRegno": "480カ7805", "defaultColor": "none", "mileage": ""}, {"seq": "23", "shop": "亀田本町店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "店長車", "exitName": "オーラ", "exitModel": "G FOUR 4WD", "cnum": "611591", "carColor": "ホワイト/ブラック", "exitRegno": "300ヌ9335", "defaultColor": "none", "mileage": ""}, {"seq": "24", "shop": "亀田本町店", "genKubun": "U6B0070", "genName": "デイズ X", "nenshiki": "R07", "genRegno": "580と7718", "shaken": "R10.11", "biko": "クエスト5", "exitKubun": "⇔", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602694", "carColor": "バニラパール", "exitRegno": "580ト9356", "defaultColor": "orange", "mileage": "3288"}, {"seq": "25", "shop": "亀田本町店", "genKubun": "U6B0076", "genName": "ノ-ト X", "nenshiki": "R07", "genRegno": "580ふ8199", "shaken": "R10.11", "biko": "クエスト5", "exitKubun": "⇔", "exitName": "ノート", "exitModel": "X FOUR 4WD", "cnum": "231988", "carColor": "ブラック", "exitRegno": "500フ8706", "defaultColor": "orange", "mileage": "2514"}, {"seq": "26", "shop": "亀田本町店", "genKubun": "U6B0071", "genName": "デイズ X", "nenshiki": "R07", "genRegno": "580と7721", "shaken": "R10.11", "biko": "U-Car 石川", "exitKubun": "⇔", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602195", "carColor": "ホワイトパール", "exitRegno": "580ト9358", "defaultColor": "orange", "mileage": "3002"}, {"seq": "27", "shop": "亀田本町店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602052", "carColor": "ホワイトパール", "exitRegno": "580ト9424", "defaultColor": "none", "mileage": ""}, {"seq": "28", "shop": "亀田本町店", "genKubun": "U6C0070", "genName": "デイズHWS-X", "nenshiki": "R08", "genRegno": "580と8880", "shaken": "R11.02", "biko": "U-Car 石川", "exitKubun": "⇔", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601494", "carColor": "ホワイトパール", "exitRegno": "580ト9348", "defaultColor": "orange", "mileage": "2914"}, {"seq": "29", "shop": "亀田本町店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602349", "carColor": "バニラパール", "exitRegno": "580ト9421", "defaultColor": "none", "mileage": ""}, {"seq": "30", "shop": "亀田本町店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "NV350", "exitModel": "DX", "cnum": "0115588", "carColor": "", "exitRegno": "400セ5013", "defaultColor": "none", "mileage": ""}, {"seq": "31", "shop": "亀田本町店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "試乗車", "exitName": "エクストレイル", "exitModel": "G 4", "cnum": "0114798", "carColor": "ホワイト", "exitRegno": "300ヌ9199", "defaultColor": "none", "mileage": ""}, {"seq": "32", "shop": "神山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602284", "carColor": "ホワイトパール", "exitRegno": "580ト9359", "defaultColor": "none", "mileage": ""}, {"seq": "33", "shop": "神山店", "genKubun": "U6B0089", "genName": "デイズ X", "nenshiki": "R07", "genRegno": "580と7720", "shaken": "R10.11", "biko": "U-Car 石川", "exitKubun": "⇔", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602330", "carColor": "ホワイトパール", "exitRegno": "580ト9360", "defaultColor": "orange", "mileage": "2434"}, {"seq": "34", "shop": "神山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "オーラ", "exitModel": "G FOUR 4WD", "cnum": "591429", "carColor": "ホワイトパール", "exitRegno": "300ヌ9266", "defaultColor": "none", "mileage": ""}, {"seq": "35", "shop": "神山店", "genKubun": "U6B0074", "genName": "ノ-ト X", "nenshiki": "R07", "genRegno": "500ふ8198", "shaken": "R10.11", "biko": "U-Car 石川", "exitKubun": "⇔", "exitName": "ノート", "exitModel": "X FOUR 4WD", "cnum": "232008", "carColor": "ホワイトパール", "exitRegno": "300ヌ8707", "defaultColor": "orange", "mileage": "4648"}, {"seq": "36", "shop": "神山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "クリッパーバン", "exitModel": "DX", "cnum": "916250", "carColor": "ホワイトパール", "exitRegno": "480カ7806", "defaultColor": "none", "mileage": ""}, {"seq": "37", "shop": "神山店", "genKubun": "U6C0078", "genName": "デイズHWS-X", "nenshiki": "R8", "genRegno": "580と8884", "shaken": "R11.02", "biko": "U-Car 石川", "exitKubun": "⇔", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601177", "carColor": "ホワイトパール", "exitRegno": "580ト9419", "defaultColor": "orange", "mileage": "3346"}, {"seq": "38", "shop": "神山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X", "cnum": "0601690", "carColor": "ブラック", "exitRegno": "580ト9208", "defaultColor": "none", "mileage": ""}, {"seq": "39", "shop": "神山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X", "cnum": "0602210", "carColor": "ブラック", "exitRegno": "580ト9212", "defaultColor": "none", "mileage": ""}, {"seq": "40", "shop": "神山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "NV350", "exitModel": "DX", "cnum": "0010753", "carColor": "ガンメタ", "exitRegno": "100ス4408", "defaultColor": "none", "mileage": ""}, {"seq": "41", "shop": "神山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "試乗車", "exitName": "セレナ", "exitModel": "e4 HS V", "cnum": "0014662", "carColor": "ホワイト", "exitRegno": "300ヌ9202", "defaultColor": "none", "mileage": ""}, {"seq": "42", "shop": "森店", "genKubun": "U6C0076", "genName": "デイズHWS-X", "nenshiki": "R08", "genRegno": "580と8881", "shaken": "R11.02", "biko": "森店展示", "exitKubun": "⇔", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601464", "carColor": "グレー", "exitRegno": "580ト9363", "defaultColor": "orange", "mileage": ""}, {"seq": "43", "shop": "森店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601345", "carColor": "ホワイトパール", "exitRegno": "580ト9365", "defaultColor": "none", "mileage": ""}, {"seq": "44", "shop": "森店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "ノート", "exitModel": "E12", "cnum": "0227917", "carColor": "", "exitRegno": "500ネ3915", "defaultColor": "none", "mileage": ""}, {"seq": "45", "shop": "森店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "NV350", "exitModel": "", "cnum": "0100076", "carColor": "", "exitRegno": "400セ2378", "defaultColor": "none", "mileage": ""}, {"seq": "46", "shop": "八雲店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601463", "carColor": "ホワイトパール", "exitRegno": "580ト9366", "defaultColor": "none", "mileage": ""}, {"seq": "47", "shop": "八雲店", "genKubun": "U6B0082", "genName": "デイズ X", "nenshiki": "R07", "genRegno": "580と7717", "shaken": "R10.11", "biko": "森店展示", "exitKubun": "⇔", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602699", "carColor": "バニラパール", "exitRegno": "580ト9357", "defaultColor": "orange", "mileage": "2621"}, {"seq": "48", "shop": "北桧山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602235", "carColor": "ホワイトパール", "exitRegno": "580ト9209", "defaultColor": "none", "mileage": ""}, {"seq": "49", "shop": "北桧山店", "genKubun": "U6B0091", "genName": "ノ-ト X", "nenshiki": "R07", "genRegno": "500ふ8197", "shaken": "R10.11", "biko": "北桧山店時", "exitKubun": "⇔", "exitName": "ノートX", "exitModel": "X", "cnum": "0231455", "carColor": "", "exitRegno": "500フ8203", "defaultColor": "orange", "mileage": "4010"}, {"seq": "50", "shop": "北桧山店", "genKubun": "U6C0073", "genName": "デイズHWS-X", "nenshiki": "R08", "genRegno": "580と8877", "shaken": "R1102", "biko": "北桧山店時", "exitKubun": "⇔", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601486", "carColor": "ホワイトパール", "exitRegno": "580ト9345", "defaultColor": "orange", "mileage": "1614"}, {"seq": "51", "shop": "北桧山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "業務車", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601484", "carColor": "ホワイトパール", "exitRegno": "580ト9367", "defaultColor": "none", "mileage": ""}, {"seq": "52", "shop": "北桧山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "AD", "exitModel": "VE", "cnum": "0067559", "carColor": "", "exitRegno": "430セ2358", "defaultColor": "none", "mileage": ""}, {"seq": "53", "shop": "北桧山店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "試乗車", "exitName": "ルークス", "exitModel": "HS X 4", "cnum": "0000260", "carColor": "ブラック", "exitRegno": "580ト7212", "defaultColor": "none", "mileage": ""}, {"seq": "54", "shop": "江差店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "X", "cnum": "0602251", "carColor": "ホワイトパール", "exitRegno": "580ト9211", "defaultColor": "none", "mileage": ""}, {"seq": "55", "shop": "江差店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "AD", "exitModel": "", "cnum": "0001469", "carColor": "", "exitRegno": "400セ5983", "defaultColor": "none", "mileage": ""}, {"seq": "56", "shop": "江差店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "キャラバン", "exitModel": "", "cnum": "0022293", "carColor": "", "exitRegno": "400セ2413", "defaultColor": "none", "mileage": ""}, {"seq": "57", "shop": "江差店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "試乗車", "exitName": "ルークス", "exitModel": "HS G ターボ 4", "cnum": "0000599", "carColor": "ブラック", "exitRegno": "580ト7209", "defaultColor": "none", "mileage": ""}, {"seq": "58", "shop": "中古本", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "業務車", "exitName": "デイズ", "exitModel": "X/AVM", "cnum": "0602244", "carColor": "ホワイトパール", "exitRegno": "580ト9361", "defaultColor": "none", "mileage": ""}, {"seq": "59", "shop": "中古本", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "業務車", "exitName": "サクラ", "exitModel": "G", "cnum": "0102903", "carColor": "ホワイトパール", "exitRegno": "580ト9400", "defaultColor": "none", "mileage": ""}, {"seq": "60", "shop": "Q5店", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "サービス", "exitName": "デイズ", "exitModel": "ハイウェイスターX", "cnum": "0601460", "carColor": "ブラック", "exitRegno": "580ト9362", "defaultColor": "none", "mileage": ""}, {"seq": "61", "shop": "本部", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "社長車", "exitName": "アリア", "exitModel": "B6 4", "cnum": "0250158", "carColor": "ホワイト", "exitRegno": "300ヌ7772", "defaultColor": "none", "mileage": ""}, {"seq": "62", "shop": "本部", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "本部長車", "exitName": "エクストレイル", "exitModel": "ロッククリーク 4", "cnum": "0115876", "carColor": "ベージュ/ブラック", "exitRegno": "300ヌ9208", "defaultColor": "none", "mileage": ""}, {"seq": "63", "shop": "本部", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "中古本部車", "exitName": "ノート", "exitModel": "X4", "cnum": "0217358", "carColor": "ホワイト", "exitRegno": "500フ7090", "defaultColor": "none", "mileage": ""}, {"seq": "64", "shop": "本部", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "", "exitName": "", "exitModel": "", "cnum": "", "carColor": "", "exitRegno": "", "defaultColor": "none", "mileage": ""}, {"seq": "65", "shop": "本部", "genKubun": "", "genName": "", "nenshiki": "", "genRegno": "", "shaken": "", "biko": "", "exitKubun": "", "exitName": "", "exitModel": "", "cnum": "", "carColor": "", "exitRegno": "", "defaultColor": "none", "mileage": ""}];
+const SHOP_LIST = [...new Set(baseRows.map(r => r.shop))];
+const baseIndexBySeq = {};
+baseRows.forEach((r, i) => { baseIndexBySeq[r.seq] = i; });
+
+let state = {};
+
+const statusEl = document.getElementById("status");
+const leftBody = document.getElementById("left-body");
+const rightBody = document.getElementById("right-body");
+
+function findBase(seq) { return baseRows.find(r => r.seq === seq) || {}; }
+function getState(seq) { return state[seq] || {}; }
+
+function getLeftShop(seq) {
+  const s = getState(seq).leftShop;
+  return (s !== undefined && s !== "") ? s : findBase(seq).shop;
+}
+function getRightShop(seq) {
+  const s = getState(seq).rightShop;
+  return (s !== undefined && s !== "") ? s : findBase(seq).shop;
+}
+function defaultPos(seq) { return (baseIndexBySeq[seq] + 1) * 1000; }
+function getLeftPos(seq) {
+  const p = getState(seq).leftPos;
+  return (p !== undefined && p !== "" && p !== null) ? Number(p) : defaultPos(seq);
+}
+function getRightPos(seq) {
+  const p = getState(seq).rightPos;
+  return (p !== undefined && p !== "" && p !== null) ? Number(p) : defaultPos(seq);
+}
+function getColor(seq) {
+  const c = getState(seq).color;
+  return (c !== undefined && c !== "") ? c : (findBase(seq).defaultColor || "none");
+}
+function getField(seq, field) {
+  const v = getState(seq)[field];
+  return (v !== undefined) ? v : "";
+}
+
+function appendText(tr, val, tdClass) {
+  const td = document.createElement("td");
+  if (tdClass) td.className = tdClass;
+  td.textContent = val || "";
+  tr.appendChild(td);
+}
+function appendInput(tr, seq, field, value, type, placeholder, tdClass, markSaved) {
+  const td = document.createElement("td");
+  if (tdClass) td.className = tdClass;
+  const input = document.createElement("input");
+  input.type = type;
+  if (placeholder) input.placeholder = placeholder;
+  if (value !== undefined && value !== null && value !== "") {
+    input.value = value;
+    if (markSaved !== false) input.classList.add("saved");
+  }
+  input.dataset.seq = seq;
+  input.dataset.field = field;
+  input.addEventListener("change", onFieldChange);
+  td.appendChild(input);
+  tr.appendChild(td);
+}
+function genField(tr, seq, field, originalVal, tdClass) {
+  const s = getState(seq);
+  const hasSavedOverride = !!(s && s[field] !== undefined && s[field] !== "");
+  const value = hasSavedOverride ? s[field] : (originalVal || "");
+  appendInput(tr, seq, field, value, "text", "", tdClass, hasSavedOverride);
+}
+function appendSelect(tr, seq, field, value, options, tdClass) {
+  const td = document.createElement("td");
+  if (tdClass) td.className = tdClass;
+  const select = document.createElement("select");
+  options.forEach(opt => {
+    const o = document.createElement("option");
+    o.value = opt;
+    o.textContent = opt === "" ? "未選択" : opt;
+    if (opt === value) o.selected = true;
+    select.appendChild(o);
+  });
+  if (value) select.classList.add("saved");
+  select.dataset.seq = seq;
+  select.dataset.field = field;
+  select.addEventListener("change", onFieldChange);
+  td.appendChild(select);
+  tr.appendChild(td);
+}
+
+async function onFieldChange(e) {
+  const input = e.target;
+  await saveField(input.dataset.seq, input.dataset.field, input.value);
+  input.classList.add("saved");
+}
+
+async function saveField(seq, field, value) {
+  if (!state[seq]) state[seq] = {};
+  state[seq][field] = value;
+
+  if (!GAS_URL || GAS_URL.indexOf("http") !== 0) {
+    statusEl.textContent = "保存先(Googleスプレッドシート)のURLが設定されていません。";
+    return;
+  }
+  try {
+    const res = await fetch(GAS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ rowId: seq, field: field, value: value })
+    });
+    const data = await res.json();
+    if (data && data.success) {
+      statusEl.textContent = "自動保存されています（全員に共有されます）";
+    } else {
+      statusEl.textContent = "保存に失敗しました。もう一度お試しください。";
+    }
+  } catch (err) {
+    statusEl.textContent = "保存エラーが発生しました。通信環境をご確認ください。";
+  }
+}
+
+let activePopup = null;
+function closeColorPopup() {
+  if (activePopup) {
+    activePopup.remove();
+    activePopup = null;
+    document.removeEventListener("click", onDocClickCloseColorPopup, true);
+  }
+}
+function onDocClickCloseColorPopup(e) {
+  if (activePopup && !activePopup.contains(e.target)) closeColorPopup();
+}
+function openColorPopup(ev, seq) {
+  ev.stopPropagation();
+  closeColorPopup();
+  const popup = document.createElement("div");
+  popup.className = "color-popup";
+  COLOR_CYCLE.forEach(c => {
+    const item = document.createElement("div");
+    item.className = "color-popup-item";
+    const swatch = document.createElement("span");
+    swatch.className = "color-popup-swatch";
+    swatch.style.background = COLOR_SWATCH[c];
+    item.appendChild(swatch);
+    const label = document.createElement("span");
+    label.textContent = COLOR_LABELS[c];
+    item.appendChild(label);
+    item.addEventListener("click", () => {
+      saveField(seq, "color", c);
+      renderRight();
+      closeColorPopup();
+    });
+    popup.appendChild(item);
+  });
+  document.body.appendChild(popup);
+  const rect = ev.target.getBoundingClientRect();
+  popup.style.left = (rect.left + window.scrollX) + "px";
+  popup.style.top = (rect.bottom + window.scrollY + 4) + "px";
+  activePopup = popup;
+  setTimeout(() => document.addEventListener("click", onDocClickCloseColorPopup, true), 0);
+}
+
+let dragState = null;
+
+function onDragStart(e, side, seq) {
+  dragState = { side, seq };
+  e.dataTransfer.effectAllowed = "move";
+  e.target.closest("tr").classList.add("dragging");
+}
+function onDragEnd(e) {
+  document.querySelectorAll("tr.dragging").forEach(tr => tr.classList.remove("dragging"));
+  document.querySelectorAll("tr.drag-over-top, tr.drag-over-bottom").forEach(tr => {
+    tr.classList.remove("drag-over-top", "drag-over-bottom");
+  });
+}
+
+function shopSeqsSorted(side, shop, excludeSeq) {
+  const getShop = side === "left" ? getLeftShop : getRightShop;
+  const getPos = side === "left" ? getLeftPos : getRightPos;
+  return baseRows
+    .map(r => r.seq)
+    .filter(seq => seq !== excludeSeq && getShop(seq) === shop)
+    .sort((a, b) => getPos(a) - getPos(b));
+}
+
+function computeInsertPos(sortedSeqs, insertIndex, getPos) {
+  if (sortedSeqs.length === 0) return 1000;
+  if (insertIndex <= 0) return getPos(sortedSeqs[0]) - 1000;
+  if (insertIndex >= sortedSeqs.length) return getPos(sortedSeqs[sortedSeqs.length - 1]) + 1000;
+  const before = getPos(sortedSeqs[insertIndex - 1]);
+  const after = getPos(sortedSeqs[insertIndex]);
+  return (before + after) / 2;
+}
+
+function onDragOverRow(e, side) {
+  if (!dragState || dragState.side !== side) return;
+  e.preventDefault();
+  const tr = e.currentTarget;
+  const rect = tr.getBoundingClientRect();
+  const isTopHalf = (e.clientY - rect.top) < rect.height / 2;
+  document.querySelectorAll("tr.drag-over-top, tr.drag-over-bottom").forEach(t => {
+    t.classList.remove("drag-over-top", "drag-over-bottom");
+  });
+  tr.classList.add(isTopHalf ? "drag-over-top" : "drag-over-bottom");
+}
+
+function onDropRow(e, side, targetSeq, targetShop) {
+  if (!dragState || dragState.side !== side) return;
+  e.preventDefault();
+  const tr = e.currentTarget;
+  const rect = tr.getBoundingClientRect();
+  const isTopHalf = (e.clientY - rect.top) < rect.height / 2;
+
+  const draggedSeq = dragState.seq;
+  if (draggedSeq === targetSeq) { dragState = null; onDragEnd(e); return; }
+
+  const getPos = side === "left" ? getLeftPos : getRightPos;
+  const sorted = shopSeqsSorted(side, targetShop, draggedSeq);
+  const targetIdxInSorted = sorted.indexOf(targetSeq);
+  const insertIndex = targetIdxInSorted === -1
+    ? sorted.length
+    : (isTopHalf ? targetIdxInSorted : targetIdxInSorted + 1);
+  const newPos = computeInsertPos(sorted, insertIndex, getPos);
+
+  const shopField = side === "left" ? "leftShop" : "rightShop";
+  const posField = side === "left" ? "leftPos" : "rightPos";
+
+  saveField(draggedSeq, shopField, targetShop);
+  saveField(draggedSeq, posField, newPos);
+
+  dragState = null;
+  onDragEnd(e);
+  setTimeout(() => { renderLeft(); renderRight(); }, 0);
+}
+
+function onDropOnGroup(e, side, shop) {
+  if (!dragState || dragState.side !== side) return;
+  e.preventDefault();
+  const draggedSeq = dragState.seq;
+  const getPos = side === "left" ? getLeftPos : getRightPos;
+  const sorted = shopSeqsSorted(side, shop, draggedSeq);
+  const newPos = computeInsertPos(sorted, sorted.length, getPos);
+
+  const shopField = side === "left" ? "leftShop" : "rightShop";
+  const posField = side === "left" ? "leftPos" : "rightPos";
+
+  saveField(draggedSeq, shopField, shop);
+  saveField(draggedSeq, posField, newPos);
+
+  dragState = null;
+  onDragEnd(e);
+  setTimeout(() => { renderLeft(); renderRight(); }, 0);
+}
+
+function addDragHandlers(tr, side, seq, shop) {
+  tr.addEventListener("dragover", (e) => onDragOverRow(e, side));
+  tr.addEventListener("drop", (e) => onDropRow(e, side, seq, shop));
+}
+
+function passesColorFilter(seq) {
+  if (activeColors.has("all")) return true;
+  return activeColors.has(getColor(seq));
+}
+function passesShopFilter(shop) {
+  if (activeShops.size === 0) return true;
+  return activeShops.has(shop);
+}
+
+function renderLeft() {
+  leftBody.innerHTML = "";
+  let posCounter = 1;
+  SHOP_LIST.forEach(shop => {
+    if (!passesShopFilter(shop)) return;
+    const seqs = shopSeqsSorted("left", shop, null);
+
+    if (seqs.length === 0) {
+      appendEmptyRow(leftBody, "left", shop, 0, 7);
+      return;
+    }
+
+    seqs.forEach((seq, idx) => {
+      const row = findBase(seq);
+      const color = getColor(seq);
+      const tr = document.createElement("tr");
+      tr.className = "rc-" + color;
+      tr.dataset.seq = seq;
+      if (idx === 0) tr.classList.add("shop-start");
+
+      if (idx === 0) {
+        const shopTd = document.createElement("td");
+        shopTd.className = "shop-cell";
+        shopTd.textContent = shop;
+        shopTd.rowSpan = seqs.length;
+        tr.appendChild(shopTd);
+      }
+
+      const dragTd = document.createElement("td");
+      dragTd.className = "drag-handle";
+      dragTd.textContent = "≡";
+      dragTd.draggable = true;
+      dragTd.addEventListener("dragstart", (e) => onDragStart(e, "left", seq));
+      dragTd.addEventListener("dragend", onDragEnd);
+      tr.appendChild(dragTd);
+
+      const seqTd = document.createElement("td");
+      seqTd.className = "seq-cell right-seq";
+      seqTd.textContent = posCounter++;
+      seqTd.title = "クリックで行の色を選択";
+      seqTd.addEventListener("click", (ev) => openColorPopup(ev, seq));
+      tr.appendChild(seqTd);
+
+      genField(tr, seq, "genKubun", row.genKubun);
+      genField(tr, seq, "genName", row.genName);
+      genField(tr, seq, "nenshiki", row.nenshiki);
+      genField(tr, seq, "genRegno", row.genRegno);
+      genField(tr, seq, "shaken", row.shaken);
+      genField(tr, seq, "biko", row.biko);
+
+      addDragHandlers(tr, "left", seq, shop);
+      leftBody.appendChild(tr);
+    });
+  });
+}
+
+function renderRight() {
+  rightBody.innerHTML = "";
+  let posCounter = 1;
+  SHOP_LIST.forEach(shop => {
+    if (!passesShopFilter(shop)) return;
+    const allSeqsInShop = shopSeqsSorted("right", shop, null);
+    const seqs = allSeqsInShop.filter(passesColorFilter);
+
+    if (seqs.length === 0) {
+      appendEmptyRow(rightBody, "right", shop, allSeqsInShop.length, 12);
+      return;
+    }
+
+    seqs.forEach((seq, idx) => {
+      const row = findBase(seq);
+      const color = getColor(seq);
+      const tr = document.createElement("tr");
+      tr.className = "rc-" + color;
+      tr.dataset.seq = seq;
+      if (idx === 0) tr.classList.add("shop-start");
+
+      if (idx === 0) {
+        const shopTd = document.createElement("td");
+        shopTd.className = "shop-cell";
+        shopTd.textContent = shop;
+        shopTd.rowSpan = seqs.length;
+        tr.appendChild(shopTd);
+      }
+
+      const dragTd = document.createElement("td");
+      dragTd.className = "drag-handle";
+      dragTd.textContent = "≡";
+      dragTd.draggable = true;
+      dragTd.addEventListener("dragstart", (e) => onDragStart(e, "right", seq));
+      dragTd.addEventListener("dragend", onDragEnd);
+      tr.appendChild(dragTd);
+
+      const seqTd = document.createElement("td");
+      seqTd.className = "seq-cell right-seq";
+      seqTd.textContent = posCounter++;
+      seqTd.title = "クリックで行の色を選択";
+      seqTd.addEventListener("click", (ev) => openColorPopup(ev, seq));
+      tr.appendChild(seqTd);
+
+      genField(tr, seq, "exitKubun", row.exitKubun);
+      genField(tr, seq, "exitName", row.exitName);
+      genField(tr, seq, "exitModel", row.exitModel);
+      genField(tr, seq, "cnum", row.cnum);
+      genField(tr, seq, "carColor", row.carColor);
+      genField(tr, seq, "exitRegno", row.exitRegno);
+      genField(tr, seq, "mileage", row.mileage, "mileage-cell");
+      appendInput(tr, seq, "kanouDate", getField(seq, "kanouDate"), "date", "", "kanou-cell");
+      appendInput(tr, seq, "henkyakuDate", getField(seq, "henkyakuDate"), "date", "", "henkyaku-cell");
+      appendInput(tr, seq, "tireSize", getField(seq, "tireSize"), "text", "", "tire-cell", getField(seq, "tireSize") !== "");
+      appendSelect(tr, seq, "tireStock", getField(seq, "tireStock"), ["", "有り", "無し"], "tire-cell");
+
+      addDragHandlers(tr, "right", seq, shop);
+      rightBody.appendChild(tr);
+    });
+  });
+}
+
+function appendEmptyRow(tbody, side, shop, hiddenCount, colspanRest) {
+  const tr = document.createElement("tr");
+  tr.className = "empty-row shop-start";
+  const shopTd = document.createElement("td");
+  shopTd.className = "shop-cell";
+  shopTd.textContent = shop;
+  tr.appendChild(shopTd);
+  const dragTd = document.createElement("td");
+  dragTd.className = "drag-handle";
+  tr.appendChild(dragTd);
+  const emptyTd = document.createElement("td");
+  emptyTd.colSpan = colspanRest;
+  emptyTd.textContent = hiddenCount > 0
+    ? "（フィルターで" + hiddenCount + "台非表示中）"
+    : "（ここにドラッグして移動）";
+  tr.appendChild(emptyTd);
+  tr.addEventListener("dragover", (e) => { if (dragState && dragState.side === side) e.preventDefault(); });
+  tr.addEventListener("drop", (e) => onDropOnGroup(e, side, shop));
+  tbody.appendChild(tr);
+}
+
+function renderAll() { renderLeft(); renderRight(); }
+
+let activeColors = new Set(["all"]);
+let activeShops = new Set();
+
+const ALL_SPECIFIC_COLORS = ["orange", "lightblue", "gray"];
+function syncColorButtons() {
+  document.querySelectorAll("#color-toggle-group .toggle-btn").forEach(btn => {
+    btn.classList.toggle("active", activeColors.has(btn.dataset.color));
+  });
+}
+function setupColorToggles() {
+  document.querySelectorAll("#color-toggle-group .toggle-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.color;
+      if (key === "all") {
+        activeColors = new Set(["all"]);
+      } else {
+        activeColors.delete("all");
+        if (activeColors.has(key)) activeColors.delete(key); else activeColors.add(key);
+        if (activeColors.size === 0) activeColors.add("all");
+        if (ALL_SPECIFIC_COLORS.every(c => activeColors.has(c))) activeColors = new Set(["all"]);
+      }
+      syncColorButtons();
+      renderRight();
+    });
+  });
+}
+function setupShopToggles() {
+  const group = document.getElementById("shop-toggle-group");
+  group.innerHTML = "";
+  SHOP_LIST.forEach(shop => {
+    const btn = document.createElement("button");
+    btn.className = "toggle-btn";
+    btn.textContent = shop;
+    btn.dataset.shop = shop;
+    btn.addEventListener("click", () => {
+      if (activeShops.has(shop)) activeShops.delete(shop); else activeShops.add(shop);
+      btn.classList.toggle("active", activeShops.has(shop));
+      renderAll();
+    });
+    group.appendChild(btn);
+  });
+}
+
+function setupViewToggle() {
+  const boardsEl = document.getElementById("boards-container");
+  document.querySelectorAll("#view-toggle-group .toggle-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("#view-toggle-group .toggle-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const mode = btn.dataset.view;
+      boardsEl.classList.remove("view-left-only", "view-right-only");
+      if (mode === "left") boardsEl.classList.add("view-left-only");
+      if (mode === "right") boardsEl.classList.add("view-right-only");
+    });
+  });
+}
+
+async function init() {
+  setupColorToggles();
+  setupShopToggles();
+  setupViewToggle();
+
+  statusEl.textContent = "読み込み中...";
+  renderAll();
+
+  if (!GAS_URL || GAS_URL.indexOf("http") !== 0) {
+    statusEl.textContent = "保存先(Googleスプレッドシート)のURLが未設定です。";
+    return;
+  }
+  try {
+    const res = await fetch(GAS_URL, { method: "GET" });
+    state = await res.json();
+    statusEl.textContent = "自動保存されています（全員に共有されます）";
+  } catch (err) {
+    state = {};
+    statusEl.textContent = "データの読み込みに失敗しました。";
+  }
+  renderAll();
+}
+
+init();
+</script>
+
+<style>
+.color-popup {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #999;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  padding: 4px;
+  z-index: 1000;
+  font-size: 12px;
+}
+.color-popup-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.color-popup-item:hover { background: #f0f0f0; }
+.color-popup-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid #999;
+  border-radius: 3px;
+}
+</style>
+
+</body>
+</html>
